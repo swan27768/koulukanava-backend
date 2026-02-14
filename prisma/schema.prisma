@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationRole {
+  MEMBER
+  ADMIN
+}
+
+enum PostType {
+  ANNOUNCEMENT
+  DISCUSSION
+  INFO
+}
+
+model User {
+  id           String @id @default(uuid())
+  email        String @unique
+  name         String
+  passwordHash String
+
+  memberships     OrganizationMember[]
+  teamMemberships TeamMember[]
+
+  posts    Post[]    @relation("PostAuthor")
+  comments Comment[] @relation("CommentAuthor")
+
+  deletedPosts    Post[]    @relation("PostDeletedBy")
+  deletedComments Comment[] @relation("CommentDeletedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Organization {
+  id   String @id @default(uuid())
+  name String
+  slug String @unique
+
+  members OrganizationMember[]
+  teams   Team[]
+  posts   Post[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrganizationMember {
+  id             String           @id @default(uuid())
+  userId         String
+  organizationId String
+  role           OrganizationRole @default(MEMBER)
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Team {
+  id        String  @id @default(uuid())
+  name      String
+  isGeneral Boolean @default(false)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  members TeamMember[]
+  posts   Post[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TeamMember {
+  id String @id @default(uuid())
+
+  teamId String
+  userId String
+
+  team Team @relation(fields: [teamId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+}
+
+model Post {
+  id      String @id @default(uuid())
+  content String
+
+  organizationId String
+  teamId         String? // null = organisaatiotiedote
+
+  type   PostType @default(DISCUSSION)
+  pinned Boolean  @default(false)
+
+  authorId String
+  author   User   @relation("PostAuthor", fields: [authorId], references: [id])
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  team         Team?        @relation(fields: [teamId], references: [id])
+
+  comments Comment[]
+
+  deletedAt   DateTime?
+  deletedById String?
+  deletedBy   User?     @relation("PostDeletedBy", fields: [deletedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([createdAt])
+}
+
+model Comment {
+  id      String @id @default(uuid())
+  content String
+
+  postId String
+  post   Post   @relation(fields: [postId], references: [id])
+
+  authorId String
+  author   User   @relation("CommentAuthor", fields: [authorId], references: [id])
+
+  deletedAt   DateTime?
+  deletedById String?
+  deletedBy   User?     @relation("CommentDeletedBy", fields: [deletedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId])
+  @@index([createdAt])
+}
