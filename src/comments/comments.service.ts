@@ -50,56 +50,76 @@ export class CommentsService {
       },
     });
   }
-
-  async findByPost(postId: string, currentUser: any) {
+  async findByPost(
+    postId: string,
+    currentUser: any,
+    cursor?: string,
+    limit: number = 5,
+  ) {
+    // Tarkista että käyttäjä kuuluu postauksen tiimiin
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
     });
 
-    if (!post) {
-      throw new NotFoundException('Post not found');
+    if (!post || post.organizationId !== currentUser.orgId) {
+      throw new ForbiddenException();
     }
 
-    const membership = await this.prisma.teamMember.findFirst({
-      where: {
-        teamId: post.teamId!,
-        userId: currentUser.id,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('Not a team member');
-    }
-
-    return this.prisma.comment.findMany({
+    const comments = await this.prisma.comment.findMany({
       where: {
         postId,
         deletedAt: null,
+        ...(cursor && {
+          createdAt: {
+            lt: new Date(cursor),
+          },
+        }),
       },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit + 1,
       include: {
         author: {
           select: {
             id: true,
             name: true,
-            email: true,
           },
         },
       },
-      orderBy: {
-        createdAt: 'asc',
-      },
     });
+
+    let nextCursor: string | null = null;
+
+    if (comments.length > limit) {
+      const nextItem = comments.pop();
+      nextCursor = nextItem?.createdAt.toISOString() ?? null;
+    }
+
+    return {
+      items: comments.reverse(), // vanhimmat ensin UI:ssa
+      nextCursor,
+    };
   }
 
   async softDelete(commentId: string, currentUser: any) {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
+      include: {
+        post: true,
+      },
     });
 
     if (!comment) {
-      throw new NotFoundException('Comment not found');
+      throw new Error('Comment not found');
     }
 
+    // Organisaatiotarkistus
+    if (comment.post.organizationId !== currentUser.orgId) {
+      throw new ForbiddenException('Wrong organization');
+    }
+
+    // Oikeustarkistus
     if (comment.authorId !== currentUser.id && currentUser.role !== 'ADMIN') {
       throw new ForbiddenException('Not allowed to delete');
     }

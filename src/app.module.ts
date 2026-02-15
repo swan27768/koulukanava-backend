@@ -10,7 +10,6 @@ import { PostsModule } from './posts/posts.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { CommentsModule } from './comments/comments.module';
-
 @Module({
   imports: [
     PrismaModule,

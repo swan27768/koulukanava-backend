@@ -7,6 +7,7 @@ import {
   Body,
   Request,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { CommentsService } from './comments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -25,9 +26,20 @@ export class CommentsController {
     return this.commentsService.create(postId, body.content, req.user);
   }
 
+  // 🔥 Cursor-based pagination
   @Get(':postId/comments')
-  async list(@Param('postId') postId: string, @Request() req: any) {
-    return this.commentsService.findByPost(postId, req.user);
+  async list(
+    @Param('postId') postId: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ) {
+    return this.commentsService.findByPost(
+      postId,
+      req.user,
+      cursor,
+      limit ? parseInt(limit, 10) : 5,
+    );
   }
 
   @Patch('comments/:commentId/delete')
